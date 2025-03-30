@@ -325,34 +325,32 @@ function initThree() {
     controls.target.copy(center);
     controls.update();
 
-    // Optional ambient light (currently commented out):
+    // Optional ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
     // Create a directional light with stronger intensity.
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-    // Position it diagonally for more interesting shadows.
     dirLight.position.set(K * 1.5, K * 2, -K * 1.5);
     dirLight.castShadow = true;
 
     // Configure shadow camera for the directional light.
-    const d = K * 3;
+    const d = K * 1.5; // Reduced from K * 3 to tighter fit the grid
     dirLight.shadow.camera.left = -d;
     dirLight.shadow.camera.right = d;
     dirLight.shadow.camera.top = d;
     dirLight.shadow.camera.bottom = -d;
     dirLight.shadow.camera.near = 0.5;
-    dirLight.shadow.camera.far = K * 8;
-    dirLight.shadow.mapSize.width = 4096;
-    dirLight.shadow.mapSize.height = 4096;
-    //dirLight.shadow.bias = -0.001;
+    dirLight.shadow.camera.far = K * 5; // Reduced from K * 6
+    dirLight.shadow.mapSize.width = 2048; // Reduced from 4096
+    dirLight.shadow.mapSize.height = 2048; // Reduced from 4096
 
     // Set the light's target to the center of the grid.
     dirLight.target.position.copy(center);
     scene.add(dirLight.target);
     scene.add(dirLight);
 
-    // Optionally, add a point light near the camera.
+    // Add a point light near the camera.
     const pointLight = new THREE.PointLight(0xffffff, 0.5);
     pointLight.castShadow = false;
     camera.add(pointLight);
@@ -364,7 +362,7 @@ function initThree() {
     ground.rotation.x = -Math.PI / 2;
     ground.position.x += K / 2;
     ground.position.z += K / 2;
-    ground.position.y = -0.5; // Slightly below your voxel grid
+    ground.position.y = -0.5;
     ground.receiveShadow = true;
     scene.add(ground);
 
@@ -377,119 +375,143 @@ function initThree() {
 function createVoxelMeshes() {
     const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
 
-    // Create one material per state.
-    // const material1 = new THREE.MeshStandardMaterial({ color: new THREE.Color(1, 0, 0) }); //red
-    // const material2 = new THREE.MeshStandardMaterial({ color: new THREE.Color(0, 1, 0) }); //green
-    // const material3 = new THREE.MeshStandardMaterial({ color: new THREE.Color(0, 0, 1) }); //blue
-
-    // Use palette colors for each state.
-    const material1 = new THREE.MeshStandardMaterial({ color: new THREE.Color(palette[2]) });
-    const material2 = new THREE.MeshStandardMaterial({ color: new THREE.Color(palette[3]) });
-    const material3 = new THREE.MeshStandardMaterial({ color: new THREE.Color(palette[4]) });
-
-    // Count voxels for each state.
-    let count1 = 0, count2 = 0, count3 = 0;
+    // Count total non-empty voxels
+    let totalCount = 0;
     for (let i = 0; i < K; i++) {
         for (let j = 0; j < K; j++) {
             for (let k = 0; k < K; k++) {
-                if (state[i][j][k] === 1) count1++;
-                else if (state[i][j][k] === 2) count2++;
-                else if (state[i][j][k] === 3) count3++;
+                if (state[i][j][k] !== 0) totalCount++;
             }
         }
     }
-    console.log("Voxel counts:", count1, count2, count3, "Total:", count1 + count2 + count3);
+    console.log("Total voxel count:", totalCount);
 
-    // Create one InstancedMesh for each state.
-    const mesh1 = new THREE.InstancedMesh(cubeGeometry, material1, count1);
-    mesh1.castShadow = true;
-    mesh1.receiveShadow = true;
-    const mesh2 = new THREE.InstancedMesh(cubeGeometry, material2, count2);
-    mesh2.castShadow = true;
-    mesh2.receiveShadow = true;
-    const mesh3 = new THREE.InstancedMesh(cubeGeometry, material3, count3);
-    mesh3.castShadow = true;
-    mesh3.receiveShadow = true;
+    // Create per-instance color attribute
+    const colors = new Float32Array(totalCount * 3); // RGB for each instance
 
+    // Use MeshPhongMaterial and extend it for instance colors
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xffffff, // Base color (will be modulated by instance color)
+        //specular: 0x111111,
+        //shininess: 30
+    });
+
+    // Modify the material's shaders to use instance colors
+    material.onBeforeCompile = (shader) => {
+        // Inject instanceColor attribute into vertex shader
+        shader.vertexShader = `
+            attribute vec3 instanceColor;
+            varying vec3 vInstanceColor;
+            ${shader.vertexShader}
+        `.replace(
+            `#include <color_vertex>`,
+            `#include <color_vertex>
+             vInstanceColor = instanceColor;`
+        );
+
+        // Pass instance color to fragment shader and use it
+        shader.fragmentShader = `
+            varying vec3 vInstanceColor;
+            ${shader.fragmentShader}
+        `.replace(
+            `#include <color_fragment>`,
+            `#include <color_fragment>
+             diffuseColor.rgb *= vInstanceColor;`
+        );
+    };
+
+    // Create single InstancedMesh
+    const mesh = new THREE.InstancedMesh(cubeGeometry, material, totalCount);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    // Depth material for shadows
     const depthMaterial = new THREE.MeshDepthMaterial({
-        //side: THREE.DoubleSide,
         depthPacking: THREE.RGBADepthPacking,
     });
     depthMaterial.defines = { USE_INSTANCING: '' };
+    mesh.customDepthMaterial = depthMaterial;
 
-    mesh1.customDepthMaterial = depthMaterial;
-    mesh2.customDepthMaterial = depthMaterial.clone();
-    mesh3.customDepthMaterial = depthMaterial.clone();
-
-
-
+    // Populate positions and colors
     const dummy = new THREE.Object3D();
-    let index1 = 0, index2 = 0, index3 = 0;
-
-    // Set positions for each voxel based on its state.
+    let index = 0;
     for (let i = 0; i < K; i++) {
         for (let j = 0; j < K; j++) {
             for (let k = 0; k < K; k++) {
                 if (state[i][j][k] !== 0) {
-                    // Remap coordinates: x = i, y = (K - 1 - k) so that k = K-1 is the base, z = j.
-                    dummy.position.set(i, (K - 1 - k), j);
+                    // Set position
+                    dummy.position.set(i, K - 1 - k, j);
                     dummy.updateMatrix();
-                    if (state[i][j][k] === 1) {
-                        mesh1.setMatrixAt(index1++, dummy.matrix);
-                    } else if (state[i][j][k] === 2) {
-                        mesh2.setMatrixAt(index2++, dummy.matrix);
-                    } else if (state[i][j][k] === 3) {
-                        mesh3.setMatrixAt(index3++, dummy.matrix);
-                    }
+                    mesh.setMatrixAt(index, dummy.matrix);
+
+                    // Set color based on state
+                    let color;
+                    if (state[i][j][k] === 1) color = new THREE.Color(palette[2]);
+                    else if (state[i][j][k] === 2) color = new THREE.Color(palette[3]);
+                    else if (state[i][j][k] === 3) color = new THREE.Color(palette[4]);
+                    colors[index * 3] = color.r;
+                    colors[index * 3 + 1] = color.g;
+                    colors[index * 3 + 2] = color.b;
+                    index++;
                 }
             }
         }
     }
-    // Flag each mesh's instance matrix for update.
-    mesh1.instanceMatrix.needsUpdate = true;
-    mesh2.instanceMatrix.needsUpdate = true;
-    mesh3.instanceMatrix.needsUpdate = true;
 
-    // Group the meshes together for easy scene management.
-    const group = new THREE.Group();
-    group.add(mesh1);
-    group.add(mesh2);
-    group.add(mesh3);
-    return group;
+    // Attach color attribute to geometry
+    cubeGeometry.setAttribute('instanceColor', new THREE.InstancedBufferAttribute(colors, 3));
+
+    // Flag instance matrix for update
+    mesh.instanceMatrix.needsUpdate = true;
+
+    // Return the single mesh
+    return mesh;
 }
 
 
 
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update();
-    //renderer.render(scene, camera);
+// Define render function
+function render() {
     composer.render();
 }
 
+// Modified animate function to tie rendering directly to controls updates
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    if (controls.hasChanged) { // Custom flag to check if controls need rendering
+        render();
+    }
+}
 
-// ----- Initialization Sequence -----
-
+// Initialization Sequence
 function init() {
-    // Set up rules (here you can also call a randomIsingRule variant)
     initRules(0.35);
-    // Initialize the state (fill the bottom layer)
     initState();
-    // Evaluate the state using the automata (this will call evalCube over multiple scales)
     evalState();
-
-    // Set up three.js scene, camera, and lights
     initThree();
-
-    // Create and add the voxel mesh to the scene.
     voxelMesh = createVoxelMeshes();
     scene.add(voxelMesh);
-
-    //post processing
     composer = initPostProcessing(renderer, scene, camera, L);
 
+    // Add a custom flag to track control changes
+    controls.hasChanged = false;
+    controls.addEventListener('start', () => {
+        controls.hasChanged = true;
+    });
+    controls.addEventListener('change', () => {
+        controls.hasChanged = true;
+    });
+    controls.addEventListener('end', () => {
+        controls.hasChanged = false;
+        render(); // Ensure one final render when movement stops
+    });
 
+    // Start animation loop
     animate();
+
+    // Initial render
+    render();
 }
 
 init();

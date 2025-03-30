@@ -25,9 +25,9 @@ export function initPostProcessing(renderer, scene, camera, L) {
     composer.addPass(bloomPass);
 
     // AfterimagePass parameter controls strength (0 = none, 1 = infinite blur)
-    const afterimagePass = new AfterimagePass(0.5);
-    afterimagePass.renderToScreen = false;
-    composer.addPass(afterimagePass);
+    //const afterimagePass = new AfterimagePass(0.5);
+    //afterimagePass.renderToScreen = false;
+    //composer.addPass(afterimagePass);
 
     // Example intensity (adjust as desired)
     const chromaticPass = new ShaderPass(ChromaticAberrationShader);
@@ -47,7 +47,7 @@ export function initPostProcessing(renderer, scene, camera, L) {
         focus: 15 * L * L - 165 * L + 470,     // distance to focus point
         
         aperture: 0.000015, // controls blur strength (smaller = less blur)
-        maxblur: 0.02,   // max blur amount
+        maxblur: 0.01,   // max blur amount
     };
     console.log(bokehParams.focus);
     // Set aspect ratio:
