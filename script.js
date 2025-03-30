@@ -5,7 +5,7 @@ import { initPostProcessing } from './postProcessing.js';
 // ----- Simulation Parameters and Data Structures -----
 
 // Universe scale: K = (1 << L) + 1; for L = 6, K = 65
-let L = 7;
+let L = 8;
 let K = (1 << L) + 1;
 
 //post processing guy
@@ -256,8 +256,6 @@ function evalState() {
             }
         }
     }
-    // After updating state, you might still want to update your colors
-    // computeLighting();
 }
 
 
@@ -330,7 +328,7 @@ function initThree() {
     scene.add(ambientLight);
 
     // Create a directional light with stronger intensity.
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.3);
     dirLight.position.set(K * 1.5, K * 2, -K * 1.5);
     dirLight.castShadow = true;
 
@@ -389,7 +387,7 @@ function createVoxelMeshes() {
     // Create per-instance color attribute
     const colors = new Float32Array(totalCount * 3); // RGB for each instance
 
-    // Use MeshPhongMaterial and extend it for instance colors
+    // Use MeshStandardMaterial and extend it for instance colors
     const material = new THREE.MeshStandardMaterial({
         color: 0xffffff, // Base color (will be modulated by instance color)
         //specular: 0x111111,
