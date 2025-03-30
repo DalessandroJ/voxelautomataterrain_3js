@@ -46,7 +46,7 @@ export function initPostProcessing(renderer, scene, camera, L) {
     const bokehParams = {
         focus: 15 * L * L - 165 * L + 470,     // distance to focus point
         
-        aperture: 0.000015, // controls blur strength (smaller = less blur)
+        aperture: 0.00001, // controls blur strength (smaller = less blur)
         maxblur: 0.01,   // max blur amount
     };
     console.log(bokehParams.focus);
