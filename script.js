@@ -18,9 +18,16 @@ let state = new Array(K)
 
 // Rule arrays (for cube, face, and edge rules)
 // In the Processing code these are 2D arrays with different dimensions.
-let cubeRule = Array.from({ length: 9 }, () => new Array(9).fill(0));
-let faceRule = Array.from({ length: 7 }, () => new Array(7).fill(0));
-let edgeRule = Array.from({ length: 7 }, () => new Array(7).fill(0));
+// Rule arrays for cube (8 neighbors), face (6 neighbors), edge (6 neighbors)
+let cubeRule = Array.from({ length: 9 }, () =>
+    Array.from({ length: 9 }, () => new Array(9).fill(0))
+);
+let faceRule = Array.from({ length: 7 }, () =>
+    Array.from({ length: 7 }, () => new Array(7).fill(0))
+);
+let edgeRule = Array.from({ length: 7 }, () =>
+    Array.from({ length: 7 }, () => new Array(7).fill(0))
+);
 
 // Stochastic flip probability (0.0 means deterministic)
 let flipP = 0.0;
@@ -73,19 +80,20 @@ function rand(min, max) {
 // --- Cube Evaluation (already provided) ---
 function evalCube(i, j, k, w) {
     if (i < 0 || j < 0 || k < 0 || i + w >= K || j + w >= K || k + w >= K) return;
-    let idx1 = 0, idx2 = 0;
-    // Sum over the 8 corners:
+    let idx1 = 0, idx2 = 0, idx3 = 0;
     for (let di of [0, w]) {
         for (let dj of [0, w]) {
             for (let dk of [0, w]) {
-                if (state[i + di][j + dj][k + dk] === 1) idx1++;
-                if (state[i + di][j + dj][k + dk] === 2) idx2++;
+                const s = state[i + di][j + dj][k + dk];
+                if (s === 1) idx1++;
+                else if (s === 2) idx2++;
+                else if (s === 3) idx3++;
             }
         }
     }
-    let newVal = cubeRule[idx1][idx2];
+    let newVal = cubeRule[idx1][idx2][idx3];
     if (Math.random() < flipP && newVal !== 0) {
-        newVal = 3 - newVal;
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1; // Cycle 1->2->3->1
     }
     state[i + Math.floor(w / 2)][j + Math.floor(w / 2)][k + Math.floor(w / 2)] = newVal;
 }
@@ -94,77 +102,121 @@ function evalCube(i, j, k, w) {
 function f1(i, j, k, w) {
     const half = Math.floor(w / 2);
     if (i < 0 || j < 0 || (k - half) < 0 || (i + w >= K) || (j + w >= K) || (k + half >= K)) return;
-    let idx1 = (state[i][j][k] === 1 ? 1 : 0) +
-        (state[i + w][j][k] === 1 ? 1 : 0) +
-        (state[i][j + w][k] === 1 ? 1 : 0) +
-        (state[i + w][j + w][k] === 1 ? 1 : 0) +
-        (state[i + half][j + half][k - half] === 1 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 1 ? 1 : 0);
-    let idx2 = (state[i][j][k] === 2 ? 1 : 0) +
-        (state[i + w][j][k] === 2 ? 1 : 0) +
-        (state[i][j + w][k] === 2 ? 1 : 0) +
-        (state[i + w][j + w][k] === 2 ? 1 : 0) +
-        (state[i + half][j + half][k - half] === 2 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 2 ? 1 : 0);
-    state[i + half][j + half][k] = faceRule[idx1][idx2];
-    if (Math.random() < flipP && state[i + half][j + half][k] !== 0) {
-        state[i + half][j + half][k] = 3 - state[i + half][j + half][k];
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k], state[i + w][j][k], state[i][j + w][k], state[i + w][j + w][k],
+        state[i + half][j + half][k - half], state[i + half][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
     }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j + half][k] = newVal;
 }
 
 function f2(i, j, k, w) {
     const half = Math.floor(w / 2);
     if (i < 0 || (j - half) < 0 || k < 0 || (i + w >= K) || (j + half >= K) || (k + w >= K)) return;
-    let idx1 = (state[i][j][k] === 1 ? 1 : 0) +
-        (state[i + w][j][k] === 1 ? 1 : 0) +
-        (state[i][j][k + w] === 1 ? 1 : 0) +
-        (state[i + w][j][k + w] === 1 ? 1 : 0) +
-        (state[i + half][j - half][k + half] === 1 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 1 ? 1 : 0);
-    let idx2 = (state[i][j][k] === 2 ? 1 : 0) +
-        (state[i + w][j][k] === 2 ? 1 : 0) +
-        (state[i][j][k + w] === 2 ? 1 : 0) +
-        (state[i + w][j][k + w] === 2 ? 1 : 0) +
-        (state[i + half][j - half][k + half] === 2 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 2 ? 1 : 0);
-    state[i + half][j][k + half] = faceRule[idx1][idx2];
-    if (Math.random() < flipP && state[i + half][j][k + half] !== 0) {
-        state[i + half][j][k + half] = 3 - state[i + half][j][k + half];
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k], state[i + w][j][k], state[i][j][k + w], state[i + w][j][k + w],
+        state[i + half][j - half][k + half], state[i + half][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
     }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j][k + half] = newVal;
 }
 
 function f3(i, j, k, w) {
     const half = Math.floor(w / 2);
     if ((i - half) < 0 || j < 0 || k < 0 || (i + half >= K) || (j + w >= K) || (k + w >= K)) return;
-    let idx1 = (state[i][j][k] === 1 ? 1 : 0) +
-        (state[i][j][k + w] === 1 ? 1 : 0) +
-        (state[i][j + w][k] === 1 ? 1 : 0) +
-        (state[i][j + w][k + w] === 1 ? 1 : 0) +
-        (state[i - half][j + half][k + half] === 1 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 1 ? 1 : 0);
-    let idx2 = (state[i][j][k] === 2 ? 1 : 0) +
-        (state[i][j][k + w] === 2 ? 1 : 0) +
-        (state[i][j + w][k] === 2 ? 1 : 0) +
-        (state[i][j + w][k + w] === 2 ? 1 : 0) +
-        (state[i - half][j + half][k + half] === 2 ? 1 : 0) +
-        (state[i + half][j + half][k + half] === 2 ? 1 : 0);
-    state[i][j + half][k + half] = faceRule[idx1][idx2];
-    if (Math.random() < flipP && state[i][j + half][k + half] !== 0) {
-        state[i][j + half][k + half] = 3 - state[i][j + half][k + half];
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k], state[i][j][k + w], state[i][j + w][k], state[i][j + w][k + w],
+        state[i - half][j + half][k + half], state[i + half][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
     }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i][j + half][k + half] = newVal;
 }
 
-// f4, f5, f6 simply reuse f1 with shifted indices.
 function f4(i, j, k, w) {
-    f1(i, j, k + w, w);
+    const half = Math.floor(w / 2);
+    if (i < 0 || j < 0 || (k + w) >= K || (i + w >= K) || (j + w >= K) || (k + w + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k + w], state[i + w][j][k + w], state[i][j + w][k + w], state[i + w][j + w][k + w],
+        state[i + half][j + half][k + w - half], state[i + half][j + half][k + w + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j + half][k + w] = newVal;
 }
 
 function f5(i, j, k, w) {
-    f1(i, j + w, k, w);
+    const half = Math.floor(w / 2);
+    if (i < 0 || (j + w) >= K || (k - half) < 0 || (i + w >= K) || (j + w + half >= K) || (k + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j + w][k], state[i + w][j + w][k], state[i][j + w][k + w], state[i + w][j + w][k + w],
+        state[i + half][j + w + half][k - half], state[i + half][j + w + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j + w][k + half] = newVal;
 }
 
 function f6(i, j, k, w) {
-    f1(i + w, j, k, w);
+    const half = Math.floor(w / 2);
+    if ((i + w) >= K || j < 0 || (k - half) < 0 || (i + w + half >= K) || (j + w >= K) || (k + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i + w][j][k], state[i + w][j + w][k], state[i + w][j][k + w], state[i + w][j + w][k + w],
+        state[i + w + half][j + half][k - half], state[i + w + half][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = faceRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + w][j + half][k + half] = newVal;
 }
 
 // Bundle face evaluations.
@@ -181,54 +233,168 @@ function evalFaces(i, j, k, w) {
 function e1(i, j, k, w) {
     const half = Math.floor(w / 2);
     if (i < 0 || (j - half) < 0 || (k - half) < 0 || (i + w >= K) || (j + half >= K) || (k + half >= K)) return;
-    let idx1 = (state[i][j][k] === 1 ? 1 : 0) +
-        (state[i + w][j][k] === 1 ? 1 : 0) +
-        (state[i + half][j - half][k] === 1 ? 1 : 0) +
-        (state[i + half][j + half][k] === 1 ? 1 : 0) +
-        (state[i + half][j][k + half] === 1 ? 1 : 0) +
-        (state[i + half][j][k - half] === 1 ? 1 : 0);
-    let idx2 = (state[i][j][k] === 2 ? 1 : 0) +
-        (state[i + w][j][k] === 2 ? 1 : 0) +
-        (state[i + half][j - half][k] === 2 ? 1 : 0) +
-        (state[i + half][j + half][k] === 2 ? 1 : 0) +
-        (state[i + half][j][k + half] === 2 ? 1 : 0) +
-        (state[i + half][j][k - half] === 2 ? 1 : 0);
-    state[i + half][j][k] = edgeRule[idx1][idx2];
-    if (Math.random() < flipP && state[i + half][j][k] !== 0) {
-        state[i + half][j][k] = 3 - state[i + half][j][k];
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k], state[i + w][j][k], state[i + half][j - half][k],
+        state[i + half][j + half][k], state[i + half][j][k + half], state[i + half][j][k - half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
     }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j][k] = newVal;
 }
 
 function e2(i, j, k, w) {
-    e1(i, j + w, k, w);
+    const half = Math.floor(w / 2);
+    if (i < 0 || (j + w) >= K || (k - half) < 0 || (i + w >= K) || (j + w + half >= K) || (k + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j + w][k], state[i + w][j + w][k],
+        state[i + half][j + w - half][k], state[i + half][j + w + half][k],
+        state[i + half][j + w][k - half], state[i + half][j + w][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j + w][k] = newVal;
 }
 
 function e3(i, j, k, w) {
-    e1(i, j, k + w, w);
+    const half = Math.floor(w / 2);
+    if (i < 0 || (j - half) < 0 || (k + w) >= K || (i + w >= K) || (j + half >= K) || (k + w + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k + w], state[i + w][j][k + w],
+        state[i + half][j - half][k + w], state[i + half][j + half][k + w],
+        state[i + half][j][k + w - half], state[i + half][j][k + w + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j][k + w] = newVal;
 }
 
 function e4(i, j, k, w) {
-    e1(i, j + w, k + w, w);
+    const half = Math.floor(w / 2);
+    if (i < 0 || (j + w) >= K || (k + w) >= K || (i + w >= K) || (j + w + half >= K) || (k + w + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j + w][k + w], state[i + w][j + w][k + w],
+        state[i + half][j + w - half][k + w], state[i + half][j + w + half][k + w],
+        state[i + half][j + w][k + w - half], state[i + half][j + w][k + w + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + half][j + w][k + w] = newVal;
 }
 
 function e5(i, j, k, w) {
     const half = Math.floor(w / 2);
-    e1(i - half, j + half, k, w);
+    if ((i - half) < 0 || j < 0 || (k - half) < 0 || (i + half >= K) || (j + w >= K) || (k + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k], state[i][j + w][k],
+        state[i - half][j + half][k], state[i + half][j + half][k],
+        state[i][j + half][k - half], state[i][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i][j + half][k] = newVal;
 }
 
 function e6(i, j, k, w) {
     const half = Math.floor(w / 2);
-    e1(i + half, j + half, k, w);
+    if ((i + w) >= K || j < 0 || (k - half) < 0 || (i + w + half >= K) || (j + w >= K) || (k + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i + w][j][k], state[i + w][j + w][k],
+        state[i + w - half][j + half][k], state[i + w + half][j + half][k],
+        state[i + w][j + half][k - half], state[i + w][j + half][k + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + w][j + half][k] = newVal;
 }
 
 function e7(i, j, k, w) {
     const half = Math.floor(w / 2);
-    e1(i - half, j + half, k + w, w);
+    if ((i - half) < 0 || j < 0 || (k + w) >= K || (i + half >= K) || (j + w >= K) || (k + w + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i][j][k + w], state[i][j + w][k + w],
+        state[i - half][j + half][k + w], state[i + half][j + half][k + w],
+        state[i][j + half][k + w - half], state[i][j + half][k + w + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i][j + half][k + w] = newVal;
 }
 
 function e8(i, j, k, w) {
     const half = Math.floor(w / 2);
-    e1(i + half, j + half, k + w, w);
+    if ((i + w) >= K || j < 0 || (k + w) >= K || (i + w + half >= K) || (j + w >= K) || (k + w + half >= K)) return;
+    let idx1 = 0, idx2 = 0, idx3 = 0;
+    const neighbors = [
+        state[i + w][j][k + w], state[i + w][j + w][k + w],
+        state[i + w - half][j + half][k + w], state[i + w + half][j + half][k + w],
+        state[i + w][j + half][k + w - half], state[i + w][j + half][k + w + half]
+    ];
+    for (let s of neighbors) {
+        if (s === 1) idx1++;
+        else if (s === 2) idx2++;
+        else if (s === 3) idx3++;
+    }
+    let newVal = edgeRule[idx1][idx2][idx3];
+    if (Math.random() < flipP && newVal !== 0) {
+        newVal = newVal === 1 ? 2 : newVal === 2 ? 3 : 1;
+    }
+    state[i + w][j + half][k + w] = newVal;
 }
 
 // Bundle edge evaluations.
@@ -271,15 +437,23 @@ function initState() {
 
 // Set up random rules (here we simply fill the rule arrays with nonzero entries with a given probability)
 function initRules(lambda = 0.35) {
-    for (let i = 0; i < 9; i++) {
-        for (let j = 0; j < 9 - i; j++) {
-            cubeRule[i][j] = (Math.random() < lambda) ? Math.floor(rand(1, 4)) : 0;
+    for (let i = 0; i < 9; i++) { // 0-8 1s
+        for (let j = 0; j < 9; j++) { // 0-8 2s
+            for (let k = 0; k < 9; k++) { // 0-8 3s
+                if (i + j + k <= 8) { // Ensure total neighbors don’t exceed 8
+                    cubeRule[i][j][k] = Math.random() < lambda ? Math.floor(rand(1, 4)) : 0;
+                }
+            }
         }
     }
     for (let i = 0; i < 7; i++) {
-        for (let j = 0; j < 7 - i; j++) {
-            faceRule[i][j] = (Math.random() < lambda) ? Math.floor(rand(1, 4)) : 0;
-            edgeRule[i][j] = (Math.random() < lambda) ? Math.floor(rand(1, 4)) : 0;
+        for (let j = 0; j < 7; j++) {
+            for (let k = 0; k < 7; k++) {
+                if (i + j + k <= 6) { // 6 neighbors max
+                    faceRule[i][j][k] = Math.random() < lambda ? Math.floor(rand(1, 4)) : 0;
+                    edgeRule[i][j][k] = Math.random() < lambda ? Math.floor(rand(1, 4)) : 0;
+                }
+            }
         }
     }
 }
